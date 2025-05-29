@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MHS AI Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the background image and font */
+        body {
+            font-family: 'Inter', sans-serif; /* Using Inter font for a modern look */
+            background-image: url('logo.png'); /* Placeholder for your logo. Replace with your actual logo.png path */
+            background-size: cover; /* Ensures the background image covers the entire viewport */
+            background-position: center; /* Centers the background image */
+            background-repeat: no-repeat; /* Prevents the background image from repeating */
+            background-attachment: fixed; /* Keeps the background image fixed when scrolling */
+            display: flex; /* Flexbox for centering content */
+            justify-content: center; /* Horizontally center content */
+            align-items: center; /* Vertically center content */
+            min-height: 100vh; /* Ensures the body takes at least the full viewport height */
+            margin: 0; /* Remove default body margin */
+            padding: 20px; /* Add some padding around the main container */
+            box-sizing: border-box; /* Include padding in element's total width and height */
+            position: relative; /* Needed for overlay */
+        }
+
+        /* Overlay to make the background logo subtle and text readable */
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.7); /* Dark overlay for better text contrast */
+            backdrop-filter: blur(3px); /* Optional: Adds a slight blur effect to the background */
+            z-index: -1; /* Puts the overlay behind the content */
+        }
+
+        /* Custom scrollbar for chat history */
+        .chat-history::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .chat-history::-webkit-scrollbar-track {
+            background: #2d3748; /* Dark grey track */
+            border-radius: 10px;
+        }
+
+        .chat-history::-webkit-scrollbar-thumb {
+            background: #4a5568; /* Slightly lighter grey thumb */
+            border-radius: 10px;
+        }
+
+        .chat-history::-webkit-scrollbar-thumb:hover {
+            background: #6a7588; /* Even lighter on hover */
+        }
+    </style>
+</head>
+<body class="text-white">
+    <div class="chat-container bg-gray-800 bg-opacity-80 rounded-xl shadow-2xl w-full max-w-3xl h-[80vh] flex flex-col overflow-hidden">
+        <div class="p-4 border-b border-gray-700 text-center text-2xl font-bold text-white">
+            MHS AI Assistant
+        </div>
+
+        <div id="chat-history" class="chat-history flex-grow p-4 overflow-y-auto space-y-4">
+            <div class="flex justify-start">
+                <div class="bg-gray-700 text-white p-3 rounded-lg max-w-xs md:max-w-md shadow-md">
+                    Hello! How can I help you today?
+                </div>
+            </div>
+        </div>
+
+        <div class="message-input-area p-4 border-t border-gray-700 flex items-center gap-3">
+            <input
+                id="prompt"
+                type="text"
+                placeholder="Type your message here..."
+                class="flex-grow p-3 rounded-full bg-gray-700 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
+                onkeypress="if(event.key === 'Enter') ask()"
+            />
+            <button
+                onclick="ask()"
+                class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-full transition-colors duration-200 shadow-lg"
+            >
+                Ask
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Function to add a message to the chat history
+        function addMessage(text, sender) {
+            const chatHistory = document.getElementById('chat-history');
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('flex', 'mb-2');
+
+            // Apply sender-specific styling
+            if (sender === 'user') {
+                messageDiv.classList.add('justify-end'); // Align to the right
+                messageDiv.innerHTML = `
+                    <div class="bg-blue-600 text-white p-3 rounded-lg max-w-xs md:max-w-md shadow-md">
+                        ${text}
+                    </div>
+                `;
+            } else if (sender === 'ai') {
+                messageDiv.classList.add('justify-start'); // Align to the left
+                messageDiv.innerHTML = `
+                    <div class="bg-gray-700 text-white p-3 rounded-lg max-w-xs md:max-w-md shadow-md">
+                        ${text}
+                    </div>
+                `;
+            }
+            chatHistory.appendChild(messageDiv);
+            // Scroll to the bottom of the chat
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        // Async function to send the prompt and get a response
+        async function ask() {
+            const promptInput = document.getElementById("prompt");
+            const userPrompt = promptInput.value.trim();
+
+            if (!userPrompt) {
+                // Optionally show a temporary message to the user if input is empty
+                console.log("Please enter a message.");
+                return;
+            }
+
+            // Add user's message to chat history
+            addMessage(userPrompt, 'user');
+            promptInput.value = ''; // Clear the input field
+
+            // Add a temporary loading message for AI
+            const loadingMessageId = 'loading-message-' + Date.now();
+            addMessage('<span id="' + loadingMessageId + '">Typing...</span>', 'ai');
+
+            try {
+                const res = await fetch("/ask", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ prompt: userPrompt })
+                });
+
+                if (!res.ok) {
+                    throw new Error(`HTTP error! status: ${res.status}`);
+                }
+
+                const data = await res.json();
+                // Remove loading message
+                const loadingMessageElement = document.getElementById(loadingMessageId);
+                if (loadingMessageElement && loadingMessageElement.parentNode) {
+                    loadingMessageElement.parentNode.remove();
+                }
+
+                // Add AI's response to chat history
+                addMessage(data.response || "Sorry, I couldn't get a response.", 'ai');
+
+            } catch (error) {
+                console.error("Error fetching response:", error);
+                // Remove loading message
+                const loadingMessageElement = document.getElementById(loadingMessageId);
+                if (loadingMessageElement && loadingMessageElement.parentNode) {
+                    loadingMessageElement.parentNode.remove();
+                }
+                // Display an error message to the user
+                addMessage("Error: Could not connect to the AI. Please try again.", 'ai');
+            }
+        }
+    </script>
+</body>
+</html>
